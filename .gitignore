@@ -34,3 +34,6 @@
 # Images
 *.png
 *.jpg
+
+# Mac stuff
+.DS_Store
