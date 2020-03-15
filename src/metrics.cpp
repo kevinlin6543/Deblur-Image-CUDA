@@ -25,7 +25,7 @@ double _mse(std::vector<int> im, unsigned int im_w, unsigned int im_h, std::vect
 
 		double ref_rgb_r = ref[i]; 
 		double ref_rgb_g = ref[i+1]; 
-		double ref_rgb_b = im[i+2];
+		double ref_rgb_b = ref[i+2];
 
 		/* Find square error for each RGB value and then append to total square error */
 		double r_sq_err = pow( (im_rgb_r - ref_rgb_r) , 2);
