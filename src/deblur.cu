@@ -5,6 +5,8 @@
 #include <cuda_profiler_api.h>
 #include <cufft.h>
 
+#define BLOCK_SIZE 32
+
 // Kernel Functions for Deconvolution
 __global__ void complexMul(cuComplex *A, cuComplex *B, cuComplex *C)
 {
@@ -30,6 +32,33 @@ __global__ void floatMul(float *A, float *B, float *C)
     C[i] = A[i] * B[i];
 }
 
+__global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB, int WB){
+  int WC = WA - WB + 1;
+  int HC = HA - HB + 1;
+  __shared__ float tmp[BLOCK_SIZE][BLOCK_SIZE];
+
+  int col = blockIdx.x * (BLOCK_SIZE - WB + 1) + threadIdx.x;
+  int row = blockIdx.y * (BLOCK_SIZE - HB + 1) + threadIdx.y;
+  int colI = col - WB + 1;
+  int rowI = row - HB + 1;
+  int sum = 0;
+
+  if(rowI < HA && rowI >= 0 && colI < WA && colI >= 0)
+    tmp[threadIdx.y][threadIdx.x] = A[colI * WA + rowI];
+  else
+    tmp[threadIdx.y][threadIdx.x] = 0;
+
+  __syncthreads();
+
+  if(threadIdx.y < (BLOCK_SIZE - HB + 1) && threadIdx.x < (BLOCK_SIZE - WB + 1) && row < (HC - HB + 1) && col < (WC - WB + 1)){
+    for(int i = 0; i < HB; i++)
+      for(int j = 0; j < WB; j++)
+        sum += tmp[threadIdx.y + i][threadIdx.x + j] * B[j*WB + i]
+    C[col*WC + row] = tmp;
+  }
+
+}
+
 /* Parameters:
   nIter = Number of Iterations
   N1 = size of Dim 1
@@ -38,8 +67,10 @@ __global__ void floatMul(float *A, float *B, float *C)
   *hImage = pointer to image memory
   *hPSF = pointer to PSF memory
   *hObject = pointer to output image memory
+  PSF_x = num rows in PSF
+  PSF_y = num cols in PSF
 */
-int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, float *hPSF, float *hObject){
+int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, float *hPSF, float *hObject, int PSF_x, int PSF_y){
   int ret = 0;
   cufftResult r;
   cudaError_t err;
@@ -47,9 +78,18 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
 
   float *im = 0;
   float *obj = 0;
-  cuComplex *otf = 0;
+  float *psf = 0;
+  float *otf = 0;
   void *buf = 0;
   void *tmp = 0;
+
+  float psfFLIP[PSF_x][PSF_y];
+
+  for(int i = 0; i < PSF_x; i++){
+    for(int j = 0; j < PSF_y; i++){
+      psfFLIP[PSF_x - i][PSF_y - j] = hPSF[i][j]
+    }
+  }
 
   size_t nSpatial = N1*N2*N3;
   size_t nFreq = N1*N2*(N3/2 + 1);
@@ -84,12 +124,17 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&otf, mFreq)
+  err = cudaMalloc(&psf, mSpatial)
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&buf, mFreq)
+  err = cudaMalloc(&otf, mSpatial)
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
+  err = cudaMalloc(&buf, mSpatial)
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
@@ -111,17 +156,22 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMemcpy(otf, hPSF, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
+  err = cudaMemcpy(psf, hPSF, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMemcpy(obj, hObject, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
+  err = cudaMemcpy(otf, psfFLIP, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-
+  err = cudaMemcpy(obj, hImage, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
+  /*
   r = createPlans(N1, N2, N3, &planR2C, &planC2R, &tmp, &tmpWork);
   if(r){
     fprintf(stderr, "CuFFT error: %d\n", r);
@@ -132,9 +182,9 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
     fprintf(stderr, "CuFFT error: %d\n", r);
     return r;
   }
-
+  */
   for(int i = 0; i < nIter; i++){
-    r = cufftExecR2C(planR2C, obj, (cufftComplex*)buf);
+    /*r = cufftExecR2C(planR2C, obj, (cufftComplex*)buf);
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
@@ -144,9 +194,17 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
-    }
-    FloatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, (float*)buf, (float*)buf);
-    r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
+    }*/
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, buf, N1, N2, PSF_x, PSF_y)
+    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, buf, buf);
+
+    int HC = N1 - PSF_x + 1;
+    int WC = N2 - PSF_y + 1;
+
+    // FLIP PSF
+
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, buf, HC, WC, PSF_x, PSF_y)
+    /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
@@ -156,8 +214,8 @@ int deconv(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, f
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
-    }
-    FloatMul<<<spatialBlocks, spatialThreadsPerBlock>>>((float*)buf, obj, obj);
+    }*/
+    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, obj, obj);
   }
   // Copy output to host
   err = cudaMemcpy(hObject, obj, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
