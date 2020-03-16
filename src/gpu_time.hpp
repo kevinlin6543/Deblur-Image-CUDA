@@ -45,7 +45,7 @@ class gpu_time {
 	{
 		float t = 0;
 		cudaEventSynchronize(stop);
-		cudaEvenElapsedTime(&t, start, stop);
+		cudaEventElapsedTime(&t, start, stop);
 		return t;
 	}
 };
