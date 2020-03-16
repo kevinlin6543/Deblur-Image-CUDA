@@ -32,10 +32,20 @@ __global__ void floatMul(float *A, float *B, float *C)
     C[i] = A[i] * B[i];
 }
 
+// Assumes RGB (3-Channels)
+/* Parameters:
+  *A = input matrix 1
+  *B = input matrix 2
+  *C = output matrix
+  HA = height of Matrix A
+  WA = width of Matrix A
+  HB = height of Matrix B
+  WB = width of Matrix B
+*/
 __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB, int WB){
   int WC = WA - WB + 1;
   int HC = HA - HB + 1;
-  __shared__ float tmp[BLOCK_SIZE][BLOCK_SIZE];
+  __shared__ float tmp[BLOCK_SIZE][BLOCK_SIZE][3];
 
   int col = blockIdx.x * (BLOCK_SIZE - WB + 1) + threadIdx.x;
   int row = blockIdx.y * (BLOCK_SIZE - HB + 1) + threadIdx.y;
@@ -43,27 +53,40 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
   int rowI = row - HB + 1;
   int sum = 0;
 
-  if(rowI < HA && rowI >= 0 && colI < WA && colI >= 0)
-    tmp[threadIdx.y][threadIdx.x] = A[colI * WA + rowI];
-  else
-    tmp[threadIdx.y][threadIdx.x] = 0;
+  if(rowI < HA && rowI >= 0 && colI < WA && colI >= 0){
+    tmp[threadIdx.y][threadIdx.x][0] = A[colI * WA + rowI + 0*(HA*WA)];
+    tmp[threadIdx.y][threadIdx.x][1] = A[colI * WA + rowI + 1*(HA*WA)];
+    tmp[threadIdx.y][threadIdx.x][2] = A[colI * WA + rowI + 2*(HA*WA)];
+  }
+  else{
+    tmp[threadIdx.y][threadIdx.x][0] = 0;
+    tmp[threadIdx.y][threadIdx.x][1] = 0;
+    tmp[threadIdx.y][threadIdx.x][2] = 0;
+  }
+
 
   __syncthreads();
 
   if(threadIdx.y < (BLOCK_SIZE - HB + 1) && threadIdx.x < (BLOCK_SIZE - WB + 1) && row < (HC - HB + 1) && col < (WC - WB + 1)){
-    for(int i = 0; i < HB; i++)
-      for(int j = 0; j < WB; j++)
-        sum += tmp[threadIdx.y + i][threadIdx.x + j] * B[j*WB + i]
-    C[col*WC + row] = tmp;
+    for(int i = 0; i < HB; i++){
+      for(int j = 0; j < WB; j++){
+        sum0 += tmp[threadIdx.y + i][threadIdx.x + j][0] * B[j*WB + i + 0*(HB*WB)];
+        sum1 += tmp[threadIdx.y + i][threadIdx.x + j][1] * B[j*WB + i + 1*(HB*WB)];
+        sum2 += tmp[threadIdx.y + i][threadIdx.x + j][2] * B[j*WB + i + 2*(HB*WB)];
+      }
+    }
+    C[col*WC + row + 0*(HC*WC)] = sum0;
+    C[col*WC + row + 1*(HC*WC)] = sum1;
+    C[col*WC + row + 2*(HC*WC)] = sum2;
   }
 
 }
 
 /* Parameters:
   nIter = Number of Iterations
-  N1 = size of Dim 1
-  N2 = size of Dim 2
-  N3 = size of Dim 3
+  N1 = size of Dim 1  (im.x)
+  N2 = size of Dim 2  (im.y)
+  N3 = size of Dim 3  (im.channels) (3 for RGB)
   *hImage = pointer to image memory
   *hPSF = pointer to PSF memory
   *hObject = pointer to output image memory
@@ -83,6 +106,8 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
   void *buf = 0;
   void *tmp = 0;
 
+
+  // FLIP PSF for algorithm operation
   float psfFLIP[PSF_x][PSF_y];
 
   for(int i = 0; i < PSF_x; i++){
@@ -200,8 +225,6 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
 
     int HC = N1 - PSF_x + 1;
     int WC = N2 - PSF_y + 1;
-
-    // FLIP PSF
 
     convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, buf, HC, WC, PSF_x, PSF_y)
     /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
