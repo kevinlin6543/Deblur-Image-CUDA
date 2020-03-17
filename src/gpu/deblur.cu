@@ -88,6 +88,50 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
 
 }
 
+static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threadsPerBlock) {
+    unsigned int BLOCKSIZE = 128;
+    int Nx, Ny, Nz;
+    int device;
+    cudaError_t err;
+    if(N < BLOCKSIZE) {
+        numBlocks->x = 1;
+        numBlocks->y = 1;
+        numBlocks->z = 1;
+        threadsPerBlock->x = N;
+        threadsPerBlock->y = 1;
+        threadsPerBlock->z = 1;
+        return cudaSuccess;
+    }
+    threadsPerBlock->x = BLOCKSIZE;
+    threadsPerBlock->y = 1;
+    threadsPerBlock->z = 1;
+    err = cudaGetDevice(&device);
+    if(err)
+      return err;
+    err = cudaDeviceGetAttribute(&Nx, cudaDevAttrMaxBlockDimX, device);
+    if(err)
+      return err;
+    err = cudaDeviceGetAttribute(&Ny, cudaDevAttrMaxBlockDimY, device);
+    if(err)
+      return err;
+    err = cudaDeviceGetAttribute(&Nz, cudaDevAttrMaxBlockDimZ, device);
+    if(err)
+      return err;
+    printf("Nx: %d, Ny: %d, Nz: %d\n", Nx, Ny, Nz);
+    unsigned int n = (N-1) / BLOCKSIZE + 1;
+    unsigned int x = (n-1) / (Ny*Nz) + 1;
+    unsigned int y = (n-1) / (x*Nz) + 1;
+    unsigned int z = (n-1) / (x*y) + 1;
+    if(x > Nx || y > Ny || z > Nz) {
+        return cudaErrorInvalidConfiguration;
+    }
+    numBlocks->x = x;
+    numBlocks->y = y;
+    numBlocks->z = z;
+
+    return cudaSuccess;
+}
+
 /* Parameters:
   nIter = Number of Iterations
   N1 = size of Dim 1  (im.x)
@@ -228,13 +272,13 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
     }*/
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, buf, N1, N2, PSF_x, PSF_y);
-    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, buf, buf);
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, (float *)buf, N1, N2, PSF_x, PSF_y);
+    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, (float *)buf, (float *)buf);
 
     int HC = N1 - PSF_x + 1;
     int WC = N2 - PSF_y + 1;
 
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, buf, HC, WC, PSF_x, PSF_y);
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, otf, (float *)buf, HC, WC, PSF_x, PSF_y);
     /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
@@ -246,7 +290,7 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
     }*/
-    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, obj, obj);
+    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, obj, obj);
   }
   // Copy output to host
   err = cudaMemcpy(hObject, obj, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
@@ -340,10 +384,10 @@ int main(int argc, char **argv)
   cudaEventRecord(start, 0);
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y);
-  
+
   cudaEventRecord(stop, 0);
   float t = 0;
-  cudaEventSynchronize(stop);		
+  cudaEventSynchronize(stop);
   cudaEventElapsedTime(&t, start, stop);
   //gt.end();
 
