@@ -4,6 +4,10 @@
 #include <cuComplex.h>
 #include <cuda_profiler_api.h>
 #include <cufft.h>
+#include "./lodepng/lodepng.h"
+#include "./metrics.hpp"
+#include "./gpu_time.hpp"
+#include <iostream>
 
 #define BLOCK_SIZE 32
 
@@ -263,3 +267,77 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
   cudaDeviceReset();
   return ret;
 }
+
+
+/* Decode the PNG into a 1D vector */
+std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
+    std::vector<unsigned char> image;
+
+    lodepng::decode(image, w, h, filename);
+
+    std::vector<int> image_without_alpha;
+    for(unsigned int i = 0; i < image.size(); i++) {
+        if (i % 4 != 3) {
+            image_without_alpha.push_back((int)image[i]);
+        }
+    }
+
+    return image_without_alpha;
+}
+
+/* Copy contents of vector to arr to be used in CUDA kernel functions */
+float * vecToArr(std::vector<int> image)
+{
+  float *arr = malloc(image.size() * sizeof(float));
+  if(!arr)
+  {
+    std::cerr << "Error converting vector to array" << std::endl;
+    exit(-1);
+  }
+
+  std::copy(image.begin(), image.end(), arr);
+
+  return arr;
+}
+
+
+int main(int argc, char **argv)
+{
+  if(argc != 3)
+  {
+    std::cerr << "Usage: " << argv[0] << " blurry.png ref.png" << std::endl;
+    exit(-1);
+  }
+
+  /* Convert the PNGs to 1D vectors */
+  unsigned w_blurry, h_blurry;
+  unsigned w_ref, h_ref;
+  std::vector<int> blurry = decodePNG(argv[1], w_blurry, h_blurry);
+  std::vector<int> ref = decodePNG(argv[2], w_ref, h_ref);
+
+  /* Convert image into array to be used in kernel functions */
+  float *blurry_arr = vecToArr(blurry);
+
+  /* Create timing class */
+  gpu_time gt;
+
+  gt.begin();  
+  /* Call kernel function with blurry_arr, w_blurry, h_blurry */
+  /* FUNCTION */
+  gt.end();
+
+  /* Re-convert back to vector for metrics computation */
+  std::vector<int> out_vec;
+  out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
+
+  /* Metrics */
+  std::cout << "Elapsed time: " << gt.elap_time() << std::endl;
+  std::cout << "MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
+  std::cout << "pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << std::endl;
+
+  /* TODO: Append alpha values to out_vec in order to see the deblurred image */
+
+  return 0;
+}
+
+
