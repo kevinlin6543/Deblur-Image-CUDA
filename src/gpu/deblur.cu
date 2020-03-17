@@ -4,10 +4,12 @@
 #include <cuComplex.h>
 #include <cuda_profiler_api.h>
 #include <cufft.h>
-#include "./lodepng/lodepng.h"
-#include "./metrics.hpp"
-#include "./gpu_time.hpp"
+#include "../lodepng/lodepng.h"
+#include "../metrics/metrics.hpp"
+//#include "./gpu_time.hpp"
 #include <iostream>
+#include <array>
+#include <vector>
 
 #define BLOCK_SIZE 32
 
@@ -70,7 +72,7 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
 
 
   __syncthreads();
-
+  float sum0 = 0, sum1 = 0, sum2 = 0;
   if(threadIdx.y < (BLOCK_SIZE - HB + 1) && threadIdx.x < (BLOCK_SIZE - WB + 1) && row < (HC - HB + 1) && col < (WC - WB + 1)){
     for(int i = 0; i < HB; i++){
       for(int j = 0; j < WB; j++){
@@ -145,27 +147,27 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
   cudaDeviceReset();
   cudaProfilerStart();
   // Memory Allocation
-  err = cudaMalloc(&im, mSpatial)
+  err = cudaMalloc(&im, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&obj, mSpatial)
+  err = cudaMalloc(&obj, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&psf, mSpatial)
+  err = cudaMalloc(&psf, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&otf, mSpatial)
+  err = cudaMalloc(&otf, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMalloc(&buf, mSpatial)
+  err = cudaMalloc(&buf, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
@@ -226,13 +228,13 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
     }*/
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, buf, N1, N2, PSF_x, PSF_y)
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, buf, N1, N2, PSF_x, PSF_y);
     floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, buf, buf);
 
     int HC = N1 - PSF_x + 1;
     int WC = N2 - PSF_y + 1;
 
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, buf, HC, WC, PSF_x, PSF_y)
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, buf, HC, WC, PSF_x, PSF_y);
     /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
     if(r){
       fprintf(stderr, "CuFFT error: %d\n", r);
@@ -290,7 +292,7 @@ std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
 /* Copy contents of vector to arr to be used in CUDA kernel functions */
 float * vecToArr(std::vector<int> image)
 {
-  float *arr = malloc(image.size() * sizeof(float));
+  float *arr = (float *)malloc(image.size() * sizeof(float));
   if(!arr)
   {
     std::cerr << "Error converting vector to array" << std::endl;
@@ -326,27 +328,37 @@ int main(int argc, char **argv)
 
   /* Convert image into array to be used in kernel functions */
   float *blurry_arr = vecToArr(blurry);
-  float *out_arr = malloc(w_blurry * h_blurry * im_z *sizeof(float));
+  float *out_arr = (float *)malloc(w_blurry * h_blurry * im_z *sizeof(float));
 
   /* Create timing class */
-  gpu_time gt;
+  //gpu_time gt;
+  //gt.begin();
 
-  gt.begin();
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, 0);
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y);
-  /* FUNCTION */
-  gt.end();
+  
+  cudaEventRecord(stop, 0);
+  float t = 0;
+  cudaEventSynchronize(stop);		
+  cudaEventElapsedTime(&t, start, stop);
+  //gt.end();
 
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
-  out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
+  //out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
+  for(int i = 0; i < sizeof(out_arr)/sizeof(out_arr[0]); i++)
+    out_vec.push_back( static_cast<int>(out_arr[i]) );
 
   /* Metrics */
-  std::cout << "Elapsed time: " << gt.elap_time() << std::endl;
+  std::cout << "Elapsed time: " << t << std::endl;
   std::cout << "MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
   std::cout << "pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << std::endl;
 
-  /* TODO: Append alpha values to out_vec in order to see the deblurred image */
+  /* TODO: Append alpha values to out_vec and change back to char in order to see the deblurred image */
 
   return 0;
 }
