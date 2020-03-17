@@ -311,6 +311,13 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
+  int ret = 0;
+  int im_z = 3;
+  int nIter = 5;
+  int PSF_x = 5;
+  int PSF_y = 5;
+  float *PSF;
+
   /* Convert the PNGs to 1D vectors */
   unsigned w_blurry, h_blurry;
   unsigned w_ref, h_ref;
@@ -319,12 +326,14 @@ int main(int argc, char **argv)
 
   /* Convert image into array to be used in kernel functions */
   float *blurry_arr = vecToArr(blurry);
+  float *out_arr = malloc(w_blurry * h_blurry * im_z *sizeof(float));
 
   /* Create timing class */
   gpu_time gt;
 
-  gt.begin();  
+  gt.begin();
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
+  ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y);
   /* FUNCTION */
   gt.end();
 
@@ -341,5 +350,3 @@ int main(int argc, char **argv)
 
   return 0;
 }
-
-
