@@ -3,6 +3,7 @@
 #include <iostream>
 #include <math.h>
 #include <algorithm>
+#include <chrono>
 
 const double pi = 3.14159265358979323846;
 //unsigned width, height, width_o, height_o;
@@ -10,10 +11,10 @@ const double pi = 3.14159265358979323846;
 std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
 	int psf_size = 5;
 	double mean_row = 0.0;
-	double mean_col = psf_size/2.0;
+	double mean_col = 0.0;
 
-	double sigma_row = 4.0;
-	double sigma_col = 3.0;
+	double sigma_row = 12.0;
+	double sigma_col = 6.0;
 
 	double sum = 0.0;
 	double temp;
@@ -22,27 +23,27 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 	std::vector<std::vector<std::vector<double> > > psf_final(psf_size, std::vector<std::vector<double> > (psf_size, std::vector<double> (3)));
 	psf_hat.resize(psf_size, std::vector<std::vector<double> >(psf_size, std::vector<double>(3)));
 
-	for (int j = 0; j< psf_init.size(); j++) {
-		for (int k = 0; k< psf_init[0].size(); k++) {
+	for (unsigned j = 0; j< psf_init.size(); j++) {
+		for (unsigned k = 0; k< psf_init[0].size(); k++) {
 			temp = exp(-0.5 * (pow((j - mean_row) / sigma_row, 2.0) + pow((k - mean_col) / sigma_col, 2.0))) / (2* pi * sigma_row * sigma_col);
 			sum += temp;
 			psf_init[j][k] = temp;
 		}
 	}
 
-	for (int row = 0; row<psf_init.size(); row++) {
-		for (int col = 0; col<psf_init[0].size(); col++) {
+	for (unsigned row = 0; row<psf_init.size(); row++) {
+		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			psf_init[row][col] /= sum;
 		}
 	}
 
-	for (int row = 0; row<psf_init.size(); row++) {
-		for (int col = 0; col<psf_init[0].size(); col++) {
+	for (unsigned row = 0; row<psf_init.size(); row++) {
+		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			//std::cerr << "[" << row << ", " << col << "] = " << psf_init[row][col] << '\n';
 			double curr = psf_init[row][col];
-			psf_final[row][col][0] = curr/3;
-			psf_final[row][col][1] = curr/3;
-			psf_final[row][col][2] = curr/3;
+			psf_final[row][col][0] = curr;
+			psf_final[row][col][1] = curr;
+			psf_final[row][col][2] = curr;
 		}
 	}
 	for (int row = 0; row < psf_size; row++) {
@@ -79,10 +80,10 @@ std::vector<std::vector<double> > convert2D(std::vector<double> &vec1D, unsigned
     //std::cerr << "vec1d size = " << vec1D.size() << '\n';
     std::vector<std::vector<double> > vec2D;
     vec2D.resize(h);
-    for (int i = 0; i < h; i++){
+    for (unsigned i = 0; i < h; i++){
         vec2D[i].resize(w);
     }
-    for (int i = 0; i < vec1D.size(); i++) {
+    for (unsigned i = 0; i < vec1D.size(); i++) {
         // std::cerr << "i = " << i << '\n';
         int row = i / w;
         int col = i % w;
@@ -105,7 +106,6 @@ void convert1D(std::vector<std::vector<std::vector<double> > > &a, std::vector<u
 			vec1D.push_back((unsigned char)(255));
 		}
 	}
-	std::cerr << (int)vec1D[214312] << std::endl;
 }
 
 void elementWiseMul(std::vector<std::vector<std::vector<double> > > &a,
@@ -118,8 +118,8 @@ void elementWiseMul(std::vector<std::vector<std::vector<double> > > &a,
 		std::cerr << "Dimension of B: [" << b.size() << ", " << b[0].size() << ", " << b[0][0].size() << "]" << std::endl;
 		exit(-1);
 	}
-	for(int i = 0; i < a.size(); i++) {
-		for(int j = 0; j < a[0].size(); j++) {
+	for(unsigned i = 0; i < a.size(); i++) {
+		for(unsigned j = 0; j < a[0].size(); j++) {
 			std::transform(a[i][j].begin(), a[i][j].end(), b[i][j].begin(), c[i][j].begin(), std::multiplies<double>());
 		}
 	}
@@ -135,8 +135,8 @@ void elementWiseDiv(std::vector<std::vector<std::vector<double> > > &a,
 		std::cerr << "Dimension of B: [" << b.size() << ", " << b[0].size() << ", " << b[0][0].size() << "]" << std::endl;
 		exit(-1);
 	}
-	for(int i = 0; i < a.size(); i++) {
-		for(int j = 0; j < a[0].size(); j++) {
+	for(unsigned i = 0; i < a.size(); i++) {
+		for(unsigned j = 0; j < a[0].size(); j++) {
 			std::transform(a[i][j].begin(), a[i][j].end(), b[i][j].begin(), c[i][j].begin(), std::divides<double>());
 		}
 	}
@@ -152,8 +152,8 @@ void convolve(std::vector<std::vector<std::vector<double> > > &src,
 	int cols = src[0].size();
 	for(int i = 0; i < rows; ++i) {
 	    for(int j = 0; j < cols; ++j) {
-	        for(int m = 0; m < kernel.size(); ++m) {
-	            for(int n = 0; n < kernel[0].size(); ++n) {
+	        for(unsigned m = 0; m < kernel.size(); ++m) {
+	            for(unsigned n = 0; n < kernel[0].size(); ++n) {
 	                int ii = i + (m - kernel_centery);
 	                int jj = j + (n - kernel_centerx);
 	                if(ii >= 0 && ii < rows && jj >= 0 && jj < cols) {
@@ -173,11 +173,11 @@ void convolve(std::vector<std::vector<std::vector<double> > > &src,
 
 void print3D(std::vector<std::vector<std::vector<double> > > a) {
 	std::cout << "[";
-	for(int i = 0; i < a.size(); i++) {
+	for(unsigned i = 0; i < a.size(); i++) {
 		std::cout << "[";
-		for(int j = 0; j < a[0].size(); j++) {
+		for(unsigned j = 0; j < a[0].size(); j++) {
 			std::cout << "[";
-			for(int k = 0; k < a[0][0].size(); k++) {
+			for(unsigned k = 0; k < a[0][0].size(); k++) {
 				std::cout << a[i][j][k] << ' ';
 			}
 			std::cout << "] ";
@@ -196,6 +196,9 @@ int main(int argc, char *argv[])
     unsigned w_orig, h_orig;
     std::vector<double> image = decodePNG("./blurry.png", w_blurry, h_blurry);
     std::vector<double> ref = decodePNG("./orig.png", w_orig, h_orig);
+
+	std::vector<int> intref(ref.begin(), ref.end());
+	std::vector<int> intimage(image.begin(), image.end());
 
     std::vector<std::vector<std::vector<double> > > final_RGB_img;
     final_RGB_img.resize(h_blurry);
@@ -216,75 +219,40 @@ int main(int argc, char *argv[])
 	std::vector<std::vector<std::vector<double> > > latent_est(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 128)));
 
 	int iterations = atoi(argv[2]);
+	auto start = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < iterations; i++) {
 		std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 		std::vector<std::vector<std::vector<double> > > error_est(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 		std::vector<std::vector<std::vector<double> > > est_conv(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 		convolve(latent_est, est_conv, psf);
+		//std::cout << "Before Value = " << latent_est[452][563][1] << std::endl;
+		//std::cout << "estimate Value = " << est_conv[452][563][1] << std::endl;
+		//std::cout << "RGB = " << final_RGB_img[452][563][1] << std::endl;
 		elementWiseDiv(final_RGB_img, est_conv, relative_blur);
+		//std::cout << "Blur = " << relative_blur[452][563][1] << std::endl;
 
+		auto temp(latent_est);
 		convolve(relative_blur, error_est, psf_hat);
-		elementWiseMul(latent_est, error_est, latent_est);
+		elementWiseMul(temp, error_est, latent_est);
+		//std::cout << "After Value = " << latent_est[452][563][1] << std::endl;
 	}
+	auto stop = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+	std::cout << duration.count() << std::endl;
 	std::vector<unsigned char> est1D;
+	std::vector<int> est1D_without_alpha;
 	convert1D(latent_est, est1D);
 	const char *fileout = argv[1];
+
 	lodepng::encode(fileout, est1D, w_blurry, h_blurry);
-    std::cout << "Height = " << final_RGB_img.size() << std::endl;
-    std::cout << "Width = " << final_RGB_img[0].size() << std::endl;
-    std::cout << "Depth = " << final_RGB_img[0][0].size() << std::endl;
-	/*
-	std::vector<std::vector<std::vector<double> > > vect1;
-	std::vector<std::vector<std::vector<double> > > vect2;
-
-	std::vector<std::vector<double> > temp1;
-	std::vector<double> temp2 {1, 2, 3};
-	temp1.push_back(temp2);
-	std::vector<double> temp3 {3, 4, 5};
-	temp1.push_back(temp3);
-	std::vector<double> temp4 {5, 6, 7};
-	temp1.push_back(temp4);
-	vect1.push_back(temp1);
-
-	std::vector<std::vector<double> > temp8;
-	std::vector<double> temp5 {9, 8, 7};
-	temp8.push_back(temp5);
-	std::vector<double> temp6 {6, 5, 4};
-	temp8.push_back(temp6);
-	std::vector<double> temp7 {3, 2, 1};
-	temp8.push_back(temp7);
-	vect1.push_back(temp8);
-
-	std::vector<std::vector<double> > temp9;
-	std::vector<double> temp10 {100, 3.5, 33.3};
-	temp9.push_back(temp10);
-	std::vector<double> temp11 {4, -2.1, 21.9};
-	temp9.push_back(temp11);
-	std::vector<double> temp12 {16, 2.3, 11.7};
-	temp9.push_back(temp12);
-	vect2.push_back(temp9);
-
-	std::vector<std::vector<double> > temp13;
-	std::vector<double> temp14 {2, 45, 5};
-	temp13.push_back(temp14);
-	std::vector<double> temp15 {6, 11, 8};
-	temp13.push_back(temp15);
-	std::vector<double> temp16 {21, 30, 17};
-	temp13.push_back(temp16);
-	vect2.push_back(temp13);
-
-	print3D(vect2);
-
-	std::vector<std::vector<std::vector<double> > > result(2, std::vector<std::vector<double> > (3, std::vector<double> (3)));
-	elementWiseMul(vect1, vect2, result);
-	print3D(result);
-	*/
-    std::cout << "Blurry Width is " << w_blurry << std::endl;
-    std::cout << "Blurry Height is " << h_blurry << std::endl;
-    std::cout << "Orig Width is " << w_orig << std::endl;
-    std::cout << "Orig Height is " << h_orig << std::endl;
-    //std::cout << "The MSE is " << _mse(image, w_blurry, h_blurry, ref) << std::endl;
-    //std::cout << "The pSNR is " << psnr(image, w_blurry, h_blurry, ref) << std::endl;
-
+	for (unsigned i = 0; i < est1D.size(); i++) {
+		if (i % 4 != 3) {
+            est1D_without_alpha.push_back((int)est1D[i]);
+        }
+	}
+    std::cout << "The blurry MSE is " << _mse(intimage, w_blurry, h_blurry, intref) << std::endl;
+    std::cout << "The blurry pSNR is " << psnr(intimage, w_blurry, h_blurry, intref) << std::endl;
+	std::cout << "The estimated MSE is " << _mse(est1D_without_alpha, w_blurry, h_blurry, intref) << std::endl;
+    std::cout << "The estimated pSNR is " << psnr(est1D_without_alpha, w_blurry, h_blurry, intref) << std::endl;
     return 0;
 }
