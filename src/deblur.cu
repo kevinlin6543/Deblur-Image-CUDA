@@ -328,7 +328,7 @@ int main(int argc, char **argv)
 
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
-  dest.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
+  out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
 
   /* Metrics */
   std::cout << "Elapsed time: " << gt.elap_time() << std::endl;
