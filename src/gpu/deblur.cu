@@ -4,8 +4,8 @@
 #include <cuComplex.h>
 #include <cuda_profiler_api.h>
 #include <cufft.h>
-#include "./lodepng/lodepng.h"
-#include "./metrics.hpp"
+#include "../lodepng/lodepng.h"
+#include "../metrics/metrics.hpp"
 #include "./gpu_time.hpp"
 #include <iostream>
 

@@ -1,5 +1,5 @@
-#include "./lodepng/lodepng.h"
-#include "./metrics.hpp"
+#include "../lodepng/lodepng.h"
+#include "../metrics/metrics.hpp"
 #include <iostream>
 
 
