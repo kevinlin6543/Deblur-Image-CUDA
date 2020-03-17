@@ -58,9 +58,9 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
   int sum = 0;
 
   if(rowI < HA && rowI >= 0 && colI < WA && colI >= 0){
-    tmp[threadIdx.y][threadIdx.x][0] = A[colI * WA + rowI + 0*(HA*WA)];
-    tmp[threadIdx.y][threadIdx.x][1] = A[colI * WA + rowI + 1*(HA*WA)];
-    tmp[threadIdx.y][threadIdx.x][2] = A[colI * WA + rowI + 2*(HA*WA)];
+    tmp[threadIdx.y][threadIdx.x][0] = A[colI + rowI*WA + 0*(HA*WA)];
+    tmp[threadIdx.y][threadIdx.x][1] = A[colI + rowI*WA + 1*(HA*WA)];
+    tmp[threadIdx.y][threadIdx.x][2] = A[colI + rowI*WA + 2*(HA*WA)];
   }
   else{
     tmp[threadIdx.y][threadIdx.x][0] = 0;
@@ -74,14 +74,14 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
   if(threadIdx.y < (BLOCK_SIZE - HB + 1) && threadIdx.x < (BLOCK_SIZE - WB + 1) && row < (HC - HB + 1) && col < (WC - WB + 1)){
     for(int i = 0; i < HB; i++){
       for(int j = 0; j < WB; j++){
-        sum0 += tmp[threadIdx.y + i][threadIdx.x + j][0] * B[j*WB + i + 0*(HB*WB)];
-        sum1 += tmp[threadIdx.y + i][threadIdx.x + j][1] * B[j*WB + i + 1*(HB*WB)];
-        sum2 += tmp[threadIdx.y + i][threadIdx.x + j][2] * B[j*WB + i + 2*(HB*WB)];
+        sum0 += tmp[threadIdx.y + i][threadIdx.x + j][0] * B[j + i*WB + 0*(HB*WB)];
+        sum1 += tmp[threadIdx.y + i][threadIdx.x + j][1] * B[j + i*WB + 1*(HB*WB)];
+        sum2 += tmp[threadIdx.y + i][threadIdx.x + j][2] * B[j + i*WB + 2*(HB*WB)];
       }
     }
-    C[col*WC + row + 0*(HC*WC)] = sum0;
-    C[col*WC + row + 1*(HC*WC)] = sum1;
-    C[col*WC + row + 2*(HC*WC)] = sum2;
+    C[col + row*WC + 0*(HC*WC)] = sum0;
+    C[col + row*WC + 1*(HC*WC)] = sum1;
+    C[col + row*WC + 2*(HC*WC)] = sum2;
   }
 
 }
@@ -112,11 +112,13 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
 
 
   // FLIP PSF for algorithm operation
-  float psfFLIP[PSF_x][PSF_y];
+  float psfFLIP[PSF_x * PSF_y * 3];
 
   for(int i = 0; i < PSF_x; i++){
     for(int j = 0; j < PSF_y; i++){
-      psfFLIP[PSF_x - i][PSF_y - j] = hPSF[i][j]
+      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 0*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 0*(PSF_x*PSF_y)];
+      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 1*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 1*(PSF_x*PSF_y)];
+      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 2*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 2*(PSF_x*PSF_y)];
     }
   }
 
