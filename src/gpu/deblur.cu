@@ -29,7 +29,13 @@ __global__ void floatDiv(float *A, float *B, float *C)
     unsigned int i = blockIdx.x * gridDim.y * gridDim.z *
                       blockDim.x + blockIdx.y * gridDim.z *
                       blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
-    C[i] = A[i] / B[i];
+    int b = A[i]/B[i];
+    C[i] = b;
+    /*if(abs(B[i]) < 0.05){
+      C[i] = A[i];
+    } else {
+      C[i] = A[i] / B[i];
+    }*/
 }
 
 __global__ void floatMul(float *A, float *B, float *C)
@@ -51,7 +57,29 @@ __global__ void floatMul(float *A, float *B, float *C)
   WB = width of Matrix B
 */
 __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB, int WB){
-  int WC = WA - WB + 1;
+  int i = blockIdx.x * gridDim.y * gridDim.z *
+                      blockDim.x + blockIdx.y * gridDim.z *
+                      blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
+  int bound = (HB * WB)/2;
+  int start = 0;
+  int colorInd = i % (HA * WA);
+  int color = i / (HA * WA);
+  float sum = 0;
+  if(i - 1 > 0 && ((i + 1) /(HA * WA) == color)){
+  for(int x = -WB/2; x < WB/2; x++){
+    for(int y = -HB/2; y < HB/2; y++){
+      //int newColor = (i + x + (WA*y)) / (HA * WA);
+      //if((i + x + (WA*y) < 0) || color != newColor){
+      //  continue;
+      //} else {
+        sum += A[i + x + (WA*y)] * B[(x + 2) + ((y+2)*WB)];
+      //}
+    }
+  }
+//    for(int x = 0
+  }
+  C[i] = sum;
+/*  int WC = WA - WB + 1;
   int HC = HA - HB + 1;
   __shared__ float tmp[BLOCK_SIZE][BLOCK_SIZE][3];
 
@@ -87,8 +115,36 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
     C[col + row*WA + 1*(HA*WA)] = sum1;
     C[col + row*WA + 2*(HA*WA)] = sum2;
   }
-
+*/
 }
+
+
+__global__ void convolution2(float *A, float *B, float *C, int HA, int WA, int HB, int WB){
+  int i = blockIdx.x * gridDim.y * gridDim.z *
+                      blockDim.x + blockIdx.y * gridDim.z *
+                      blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
+  //int bound = (HB * WB)/2;
+  //int start = 0;
+  //int colorInd = i % (HA * WA);
+  int color = i / (HA * WA);
+  float sum = 0;
+  if(i - 1 > 0 && ((i + 1) /(HA * WA) == color)){
+  for(int x = -WB/2; x < WB/2; x++){
+    for(int y = -HB/2; y < HB/2; y++){
+      //int newColor = (i + x + (WA*y)) / (HA * WA);
+      //if((i + x + (WA*y) < 0) || color != newColor){
+      //  continue;
+      //} else {
+        sum += A[i + x + (WA*y)] * B[(x + 2) + ((y+2)*WB)];
+      //}
+    }
+  }
+//    for(int x = 0
+  }
+  //if(sum < 10000 && sum >= 0)
+  //  C[i] = sum;
+}
+
 
 static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threadsPerBlock) {
     unsigned int BLOCKSIZE = 128;
@@ -155,8 +211,8 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
   float *obj = 0;
   float *psf = 0;
   float *otf = 0;
-  void *buf = 0;
-  void *tmp = 0;
+  float *buf = 0;
+  float *tmp = 0;
 
   //cerr << PSF_x << ":" << PSF_y << endl;
   // FLIP PSF for algorithm operation
@@ -229,12 +285,22 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
+  err = cudaMalloc(&tmp, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
   err = cudaMemset(im, 0, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
   err = cudaMemset(obj, 0, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
+  err = cudaMemset(buf, 0, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
@@ -292,13 +358,21 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
       return r;
     }*/
     // cerr << N1 << " , " << N2 << " , " << N3 << endl;
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, (float *)buf, N1, N2, PSF_x, PSF_y);
-    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, (float *)buf, (float *)buf);
-
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, buf, N1, N2, PSF_x, PSF_y);
+//    fprintf(stderr, "%.2f\n", buf[1382400]);
+//    fprintf(stderr, "%.2f\n", tmp[1382400]);
+    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, buf, tmp);
+ //   fprintf(stderr, "%.2f\n", buf[1382400]);
+//    fprintf(stderr, "%.2f\n", tmp[1382400]);
     //int HC = N1 - PSF_x + 1;
     //int WC = N2 - PSF_y + 1;
+    err = cudaMemset(buf, 0, mSpatial);
+    if(err){
+      fprintf(stderr, "CUDA error: %d\n", err);
+      return err;
+    }
 
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, otf, (float *)buf, N1, N2, PSF_x, PSF_y);
+    convolution2<<<spatialBlocks, spatialThreadsPerBlock>>>(tmp, otf, buf, N1, N2, PSF_x, PSF_y);
     //cerr << (
     /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
     if(r){
@@ -311,10 +385,10 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
       fprintf(stderr, "CuFFT error: %d\n", r);
       return r;
     }*/
-    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, obj, obj);
+    //floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, obj, obj);
   }
   // Copy output to host
-  err = cudaMemcpy(hObject, obj, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
+  err = cudaMemcpy(hObject, tmp, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
@@ -345,10 +419,19 @@ std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
     lodepng::decode(image, w, h, filename);
 
     std::vector<int> image_without_alpha;
-    for(unsigned int i = 0; i < image.size(); i++) {
+    /*for(unsigned int i = 0; i < image.size(); i++) {
         if (i % 4 != 3) {
             image_without_alpha.push_back((int)image[i]);
         }
+    }*/
+    for(unsigned int i = 0; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
+    }
+    for(unsigned int i = 1; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
+    }
+    for(unsigned int i = 2; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
     }
 
     return image_without_alpha;
@@ -357,13 +440,17 @@ std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
 int encodePNG(vector<int> im, unsigned &w, unsigned &h){
     int counter = 0;
     vector<unsigned char> image;
-    for(int i = 0; i < im.size(); i++){
-        if(i%3 == 0 && i != 0){
-            image.push_back(255);
-        }
+    for(int i = 0; i < im.size()/3; i++){
+        //if(i%3 == 0 && i != 0){
+        //    image.push_back(255);
+        //}
         image.push_back(im[i]);
+	image.push_back(im[i+(w*h)]);
+	image.push_back(im[i+(2*w*h)]);
+	image.push_back(255);
     }
-    image.push_back(255);
+    //for(int i = 0; i < im.size()
+    //image.push_back(255);
     cerr << "SIZE: " << image.size() <<endl;
     unsigned err = lodepng::encode((const char *)"./img/test3.png", image, w, h);
     cerr << lodepng_error_text(err) << endl;
@@ -452,11 +539,28 @@ void convert1D(std::vector<std::vector<std::vector<double> > > &a, std::vector<d
 	for(unsigned i = 0; i < a.size(); i++) {
 		for(unsigned j = 0; j < a[0].size(); j++) {
 			vec1D.push_back(a[i][j][0]);
-			vec1D.push_back(a[i][j][1]);
-			vec1D.push_back(a[i][j][2]);
+			//vec1D.push_back(a[i][j][1]);
+			//vec1D.push_back(a[i][j][2]);
 			//vec1D.push_back((unsigned char)(255));
 		}
 	}
+        for(unsigned i = 0; i < a.size(); i++) {
+                for(unsigned j = 0; j < a[0].size(); j++) {
+                        //vec1D.push_back(a[i][j][0]);
+                        vec1D.push_back(a[i][j][1]);
+                        //vec1D.push_back(a[i][j][2]);
+                        //vec1D.push_back((unsigned char)(255));
+                }
+        }
+        for(unsigned i = 0; i < a.size(); i++) {
+                for(unsigned j = 0; j < a[0].size(); j++) {
+                        //vec1D.push_back(a[i][j][0]);
+                        //vec1D.push_back(a[i][j][1]);
+                        vec1D.push_back(a[i][j][2]);
+                        //vec1D.push_back((unsigned char)(255));
+                }
+        }
+
 }
 
 
