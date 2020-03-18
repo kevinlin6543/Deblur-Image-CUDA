@@ -158,10 +158,10 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
 
 
   // FLIP PSF for algorithm operation
-  float psfFLIP[PSF_x * PSF_y * 3];
+  float *psfFLIP = (float *)malloc(PSF_x * PSF_y * 3 * sizeof(float));
 
   for(int i = 0; i < PSF_x; i++){
-    for(int j = 0; j < PSF_y; i++){
+    for(int j = 0; j < PSF_y; j++){
       psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 0*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 0*(PSF_x*PSF_y)];
       psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 1*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 1*(PSF_x*PSF_y)];
       psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 2*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 2*(PSF_x*PSF_y)];
@@ -238,7 +238,10 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = cudaMemcpy(otf, psfFLIP, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
+  // ERROR OCCURS HERE ***************************************************//
+  //err = cudaMemcpy(otf, psfFLIP, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
+  // *********************************************************************//
+  err = cudaMemcpy(otf, hPSF, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
@@ -440,7 +443,7 @@ int main(int argc, char **argv)
   /* Convert image into array to be used in kernel functions */
   float *blurry_arr = vecToArr(blurry);
   float *out_arr = (float *)malloc(w_blurry * h_blurry * im_z *sizeof(float));
-  
+
   /* Create timing class */
   //gpu_time gt;
   //gt.begin();
@@ -449,9 +452,10 @@ int main(int argc, char **argv)
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   cudaEventRecord(start, 0);
+  cerr << "Survived Initialization" << endl;
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y);
-
+  cerr << "Survived Convolution Algorithm" << endl;
   cudaEventRecord(stop, 0);
   float t = 0;
   cudaEventSynchronize(stop);
