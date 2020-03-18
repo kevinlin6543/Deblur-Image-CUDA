@@ -9,12 +9,12 @@ const double pi = 3.14159265358979323846;
 //unsigned width, height, width_o, height_o;
 
 std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
-	int psf_size = 3;
+	int psf_size = 5;
 	double mean_row = 0.0;
 	double mean_col = psf_size/2.0;
 
-	double sigma_row = 8.0;
-	double sigma_col = 6.0;
+	double sigma_row = 9.0;
+	double sigma_col = 8.0;
 
 	double sum = 0.0;
 	double temp;
@@ -42,9 +42,9 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			//std::cerr << "[" << row << ", " << col << "] = " << psf_init[row][col] << '\n';
 			double curr = psf_init[row][col];
-			psf_final[row][col][0] = curr;
-			psf_final[row][col][1] = curr;
-			psf_final[row][col][2] = curr;
+			psf_final[row][col][0] = curr/3;
+			psf_final[row][col][1] = curr/3;
+			psf_final[row][col][2] = curr/3;
 		}
 	}
 	for (int row = 0; row < psf_size; row++) {
@@ -138,8 +138,8 @@ void elementWiseDiv(std::vector<std::vector<std::vector<double> > > &a,
 
 std::vector<std::vector<std::vector<double> > > convolve(std::vector<std::vector<std::vector<double> > > &src,
 	std::vector<std::vector<std::vector<double> > > &kernel) {
-	auto dest(src);
-	//std::vector<std::vector<std::vector<double> > > dest(src.size(), std::vector<std::vector<double> > (src[0].size(), std::vector<double> (3, 0.0)));
+	//auto dest(src);
+	std::vector<std::vector<std::vector<double> > > dest(src.size(), std::vector<std::vector<double> > (src[0].size(), std::vector<double> (3, 0.0)));
 	int kernel_centerx = kernel[0].size() / 2;
 	int kernel_centery = kernel.size() / 2;
 	int rows = src.size();
@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
 	std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 	for (int i = 0; i < iterations; i++) {
 		std::vector<std::vector<std::vector<double> > > est_conv = convolve(latent_est, psf);
-		elementWiseDiv(latent_est, est_conv, relative_blur);
+		elementWiseDiv(final_RGB_img, est_conv, relative_blur);
 
 		auto temp(latent_est);
 		std::vector<std::vector<std::vector<double> > > error_est = convolve(relative_blur, psf_hat);
