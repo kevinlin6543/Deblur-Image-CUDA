@@ -31,6 +31,7 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 		}
 	}
 
+
 	for (unsigned row = 0; row<psf_init.size(); row++) {
 		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			psf_init[row][col] /= sum;
@@ -41,9 +42,9 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			//std::cerr << "[" << row << ", " << col << "] = " << psf_init[row][col] << '\n';
 			double curr = psf_init[row][col];
-			psf_final[row][col][0] = curr*16;
-			psf_final[row][col][1] = curr*4;
-			psf_final[row][col][2] = curr/4;
+			psf_final[row][col][0] = curr;
+			psf_final[row][col][1] = curr;
+			psf_final[row][col][2] = curr;
 		}
 	}
 	for (int row = 0; row < psf_size; row++) {
@@ -185,6 +186,9 @@ int main(int argc, char *argv[])
 	if (argc < 3) {
 		exit(-1);
 	}
+	const char *fileout = argv[1];
+	int iterations = atoi(argv[2]);
+
     unsigned w_blurry, h_blurry;
     unsigned w_orig, h_orig;
     std::vector<double> image = decodePNG("./blurry.png", w_blurry, h_blurry);
@@ -202,18 +206,14 @@ int main(int argc, char *argv[])
     }
 
 	std::vector<std::vector<std::vector<double> > > psf_hat;
-
-
 	std::vector<std::vector<std::vector<double> > > psf = calculatePSF(psf_hat);
 	print3D(psf);
 	print3D(psf_hat);
 
 	auto latent_est(final_RGB_img);
-	int iterations = atoi(argv[2]);
+
 	auto start = std::chrono::high_resolution_clock::now();
 	std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
-
-	//convolve(latent_est, est_conv, psf);
 	for (int i = 0; i < iterations; i++) {
 		std::vector<std::vector<std::vector<double> > > est_conv = convolve(latent_est, psf);
 		elementWiseDiv(latent_est, est_conv, relative_blur);
@@ -225,10 +225,10 @@ int main(int argc, char *argv[])
 	auto stop = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 	std::cout << duration.count() << std::endl;
+
 	std::vector<unsigned char> est1D;
 	std::vector<int> est1D_without_alpha;
 	convert1D(latent_est, est1D);
-	const char *fileout = argv[1];
 
 	lodepng::encode(fileout, est1D, w_blurry, h_blurry);
 	for (unsigned i = 0; i < est1D.size(); i++) {
