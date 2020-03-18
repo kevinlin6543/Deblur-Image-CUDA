@@ -348,12 +348,74 @@ float * vecToArr(std::vector<int> image)
   return arr;
 }
 
+const double pi = 3.14159265358979323846;
+std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
+	int psf_size = 5;
+	double mean_row = 0.0;
+	double mean_col = 0.0;
+
+	double sigma_row = 12.0;
+	double sigma_col = 6.0;
+
+	double sum = 0.0;
+	double temp;
+
+	std::vector<std::vector<double> > psf_init(psf_size, std::vector<double> (psf_size));
+	std::vector<std::vector<std::vector<double> > > psf_final(psf_size, std::vector<std::vector<double> > (psf_size, std::vector<double> (3)));
+	psf_hat.resize(psf_size, std::vector<std::vector<double> >(psf_size, std::vector<double>(3)));
+
+	for (unsigned j = 0; j< psf_init.size(); j++) {
+		for (unsigned k = 0; k< psf_init[0].size(); k++) {
+			temp = exp(-0.5 * (pow((j - mean_row) / sigma_row, 2.0) + pow((k - mean_col) / sigma_col, 2.0))) / (2* pi * sigma_row * sigma_col);
+			sum += temp;
+			psf_init[j][k] = temp;
+		}
+	}
+
+	for (unsigned row = 0; row<psf_init.size(); row++) {
+		for (unsigned col = 0; col<psf_init[0].size(); col++) {
+			psf_init[row][col] /= sum;
+		}
+	}
+
+	for (unsigned row = 0; row<psf_init.size(); row++) {
+		for (unsigned col = 0; col<psf_init[0].size(); col++) {
+			//std::cerr << "[" << row << ", " << col << "] = " << psf_init[row][col] << '\n';
+			double curr = psf_init[row][col];
+			psf_final[row][col][0] = curr;
+			psf_final[row][col][1] = curr;
+			psf_final[row][col][2] = curr;
+		}
+	}
+	for (int row = 0; row < psf_size; row++) {
+		for (int col = 0; col < psf_size; col++) {
+			int y = psf_size - 1 - row;
+			int x = psf_size - 1 - col;
+			psf_hat[y][x][0] = psf_final[row][col][0];
+			psf_hat[y][x][1] = psf_final[row][col][1];
+			psf_hat[y][x][2] = psf_final[row][col][2];
+		}
+	}
+	return psf_final;
+}
+
+void convert1D(std::vector<std::vector<std::vector<double> > > &a, std::vector<int> &vec1D) {
+	for(unsigned i = 0; i < a.size(); i++) {
+		for(unsigned j = 0; j < a[0].size(); j++) {
+			vec1D.push_back(a[i][j][0]);
+			vec1D.push_back(a[i][j][1]);
+			vec1D.push_back(a[i][j][2]);
+			//vec1D.push_back((unsigned char)(255));
+		}
+	}
+}
+
 
 int main(int argc, char **argv)
 {
   if(argc != 3)
   {
-    std::cerr << "Usage: " << argv[0] << " blurry.png ref.png" << std::endl;
+    std::cerr << "Usage:  " << argv[0] << " blurry.png ref.png" << std::endl;
     exit(-1);
   }
 
@@ -362,7 +424,12 @@ int main(int argc, char **argv)
   int nIter = 5;
   int PSF_x = 5;
   int PSF_y = 5;
-  float *PSF;
+
+  std::vector<std::vector<std::vector<double>>> psf_hat;
+  std::vector<std::vector<std::vector<double>>> psf_vec = calculatePSF(psf_hat);
+  std::vector<int> psf_1d;
+  convert1D(psf_vec, psf_1d);
+  float *PSF = vecToArr(psf_1d);
 
   /* Convert the PNGs to 1D vectors */
   unsigned w_blurry, h_blurry;
@@ -373,7 +440,7 @@ int main(int argc, char **argv)
   /* Convert image into array to be used in kernel functions */
   float *blurry_arr = vecToArr(blurry);
   float *out_arr = (float *)malloc(w_blurry * h_blurry * im_z *sizeof(float));
-
+  
   /* Create timing class */
   //gpu_time gt;
   //gt.begin();

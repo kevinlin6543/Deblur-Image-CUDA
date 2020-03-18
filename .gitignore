@@ -32,7 +32,6 @@
 *.app
 
 # Images
-*.png
 *.jpg
 
 # Mac stuff
