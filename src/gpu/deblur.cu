@@ -129,8 +129,8 @@ static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threa
   PSF_x = num rows in PSF
   PSF_y = num cols in PSF
 */
-int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, float *hPSF, float *hObject, int PSF_x, int PSF_y, float *hPSF2){
-  int ret = 0;
+/*int*/float deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, float *hPSF, float *hObject, int PSF_x, int PSF_y, float *hPSF2){
+  //int ret = 0;
   cudaError_t err;
 
   float *im = 0;
@@ -232,12 +232,20 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     return err;
   }
 
+  /* Perform the timing */
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start); cudaEventCreate(&stop);
+  cudaEventRecord(start, 0);
   for(int i = 0; i < nIter; i++){
     convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, tmp, N1, N2, PSF_x, PSF_y);
     floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, tmp, buf);
     convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, tmp, N1, N2, PSF_x, PSF_y);
     floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>(tmp, obj, obj);
   }
+  cudaEventRecord(stop, 0);
+  float t = 0;
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&t, start, stop);
   // Copy output to host
   err = cudaMemcpy(hObject, obj, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
   if(err){
@@ -245,7 +253,7 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     return err;
   }
 
-  ret = 0;
+  //ret = 0;
   // Clean Up Params and Return
   if(im)
     cudaFree(im);
@@ -259,7 +267,7 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     cudaFree(tmp);
   cudaProfilerStop();
   cudaDeviceReset();
-  return ret;
+  return t;
 }
 
 
@@ -321,8 +329,8 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 	double mean_row = 0.0;
 	double mean_col = 0.0;
 
-	double sigma_row = 5.0;
-	double sigma_col = 5.0;
+	double sigma_row = 3.0;
+	double sigma_col = 4.0;
 
 	double sum = 0.0;
 	double temp;
@@ -428,9 +436,10 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  int ret = 0;
+  //int ret = 0;
+  float ret = 0;
   int im_z = 3;
-  int nIter = 8;
+  int nIter = 10;
   int PSF_x = 5;
   int PSF_y = 5;
 
@@ -452,29 +461,17 @@ int main(int argc, char **argv)
   float *blurry_arr = vecToArr(blurry);
   float *out_arr = (float *)malloc(w_blurry * h_blurry * im_z *sizeof(float));
 
-  /* Create timing class */
-  //gpu_time gt;
-  //gt.begin();
-
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y, PSF2);
-  cudaEventRecord(stop, 0);
-  float t = 0;
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&t, start, stop);
-  //gt.end();
-
+  
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
   //out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
   for(int i = 0; i < 2764800; i++)
     out_vec.push_back( static_cast<int>(out_arr[i]) );
+
   /* Metrics */
-  std::cout << "Elapsed time: " << t << std::endl;
+  std::cout << "Elapsed time (ms): " << ret << std::endl;
   std::cout << "MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
   std::cout << "pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << std::endl;
   int test = encodePNG(out_vec, w_blurry, h_blurry);
