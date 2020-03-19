@@ -29,7 +29,13 @@ __global__ void floatDiv(float *A, float *B, float *C)
     unsigned int i = blockIdx.x * gridDim.y * gridDim.z *
                       blockDim.x + blockIdx.y * gridDim.z *
                       blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
-    C[i] = A[i] / B[i];
+    int b = A[i]/B[i];
+    C[i] = b;
+    /*if(abs(B[i]) < 0.05){
+      C[i] = A[i];
+    } else {
+      C[i] = A[i] / B[i];
+    }*/
 }
 
 __global__ void floatMul(float *A, float *B, float *C)
@@ -51,44 +57,21 @@ __global__ void floatMul(float *A, float *B, float *C)
   WB = width of Matrix B
 */
 __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB, int WB){
-  int WC = WA - WB + 1;
-  int HC = HA - HB + 1;
-  __shared__ float tmp[BLOCK_SIZE][BLOCK_SIZE][3];
-
-  int col = blockIdx.x * (BLOCK_SIZE - WB + 1) + threadIdx.x + ((WA-WC)/2);
-  int row = blockIdx.y * (BLOCK_SIZE - HB + 1) + threadIdx.y + ((HA-HC)/2);
-  int colI = col - WB + 1;
-  int rowI = row - HB + 1;
-  int sum = 0;
-
-  if(rowI < HA && rowI >= 0 && colI < WA && colI >= 0){
-    tmp[threadIdx.y][threadIdx.x][0] = A[colI + rowI*WA + 0*(HA*WA)];
-    tmp[threadIdx.y][threadIdx.x][1] = A[colI + rowI*WA + 1*(HA*WA)];
-    tmp[threadIdx.y][threadIdx.x][2] = A[colI + rowI*WA + 2*(HA*WA)];
-  }
-  else{
-    tmp[threadIdx.y][threadIdx.x][0] = 0;
-    tmp[threadIdx.y][threadIdx.x][1] = 0;
-    tmp[threadIdx.y][threadIdx.x][2] = 0;
-  }
-
-
-  __syncthreads();
-  float sum0 = 0, sum1 = 0, sum2 = 0;
-  if(threadIdx.y < (BLOCK_SIZE - HB + 1) && threadIdx.x < (BLOCK_SIZE - WB + 1) && row < (HC - HB + 1) && col < (WC - WB + 1)){
-    for(int i = 0; i < HB; i++){
-      for(int j = 0; j < WB; j++){
-        sum0 += tmp[threadIdx.y + i][threadIdx.x + j][0] * B[j + i*WB + 0*(HB*WB)];
-        sum1 += tmp[threadIdx.y + i][threadIdx.x + j][1] * B[j + i*WB + 1*(HB*WB)];
-        sum2 += tmp[threadIdx.y + i][threadIdx.x + j][2] * B[j + i*WB + 2*(HB*WB)];
+  int i = blockIdx.x * gridDim.y * gridDim.z *
+                      blockDim.x + blockIdx.y * gridDim.z *
+                      blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
+  int color = i / (HA * WA);
+  float sum = 0;
+  if(i - 1 > 0 && ((i + 1) /(HA * WA) == color)){
+    for(int x = -WB/2; x < WB/2; x++){
+      for(int y = -HB/2; y < HB/2; y++){
+        sum += A[i + x + (WA*y)] * B[(x + 2) + ((y+2)*WB)];
       }
     }
-    C[col + row*WA + 0*(HA*WA)] = sum0;
-    C[col + row*WA + 1*(HA*WA)] = sum1;
-    C[col + row*WA + 2*(HA*WA)] = sum2;
   }
-
+  C[i] = sum;
 }
+
 
 static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threadsPerBlock) {
     unsigned int BLOCKSIZE = 128;
@@ -119,7 +102,6 @@ static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threa
     err = cudaDeviceGetAttribute(&Nz, cudaDevAttrMaxBlockDimZ, device);
     if(err)
       return err;
-    printf("Nx: %d, Ny: %d, Nz: %d\n", Nx, Ny, Nz);
     unsigned int n = (N-1) / BLOCKSIZE + 1;
     unsigned int x = (n-1) / (Ny*Nz) + 1;
     unsigned int y = (n-1) / (x*Nz) + 1;
@@ -147,62 +129,29 @@ static cudaError_t numBlocksThreads(unsigned int N, dim3 *numBlocks, dim3 *threa
 */
 int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage, float *hPSF, float *hObject, int PSF_x, int PSF_y, float *hPSF2){
   int ret = 0;
-  cufftResult r;
   cudaError_t err;
-  cufftHandle planR2C, planC2R;
 
   float *im = 0;
   float *obj = 0;
   float *psf = 0;
   float *otf = 0;
-  void *buf = 0;
-  void *tmp = 0;
-
-  //cerr << PSF_x << ":" << PSF_y << endl;
-  // FLIP PSF for algorithm operation
-  /*float *psfFLIP = (float *)malloc(PSF_x * PSF_y * 3 * sizeof(float));
-  cerr << "Got Into Function" << endl;
-  for(int i = 0; i < PSF_x; i++){
-    for(int j = 0; j < PSF_y; j++){
-      //cerr << i << " : " << j << endl;
-      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 0*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 0*(PSF_x*PSF_y)];
-      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 1*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 1*(PSF_x*PSF_y)];
-      psfFLIP[(PSF_x*PSF_y) - j - (i*PSF_y) - 1 + 2*(PSF_x*PSF_y)] = hPSF[j + PSF_y*i + 2*(PSF_x*PSF_y)];
-    }
-  }
-
-  for(int i = 0; i < PSF_x*PSF_y; i++){
-    cerr << "PSFR: " << hPSF[i] << " FLIP:" << psfFLIP[i] << endl;
-    cerr << "PSFG: " << hPSF[i + 1*(PSF_x*PSF_y)] << " FLIP:" << psfFLIP[i + 1*(PSF_x*PSF_y)] << endl;
-    cerr << "PSFB: " << hPSF[i + 2*(PSF_x*PSF_y)] << " FLIP:" << psfFLIP[i + 2*(PSF_x*PSF_y)] << endl;
-
-  }
-  cerr << "Survived Flip" << endl;*/
+  float *buf = 0;
+  float *tmp = 0;
+  float *tmp2 = 0;
 
   size_t nSpatial = N1*N2*N3;
-  size_t nFreq = N1*N2*(N3/2 + 1);
   size_t mSpatial;
-  size_t mFreq;
-  dim3 freqThreadsPerBlock, spatialThreadsPerBlock, freqBlocks, spatialBlocks;
-  size_t tmpWork;
+  dim3 spatialThreadsPerBlock, spatialBlocks;
   err = numBlocksThreads(nSpatial, &spatialBlocks, &spatialThreadsPerBlock);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  err = numBlocksThreads(nFreq, &freqBlocks, &freqThreadsPerBlock);
-  if(err){
-    fprintf(stderr, "CUDA error: %d\n", err);
-    return err;
-  }
-
   mSpatial = spatialBlocks.x * spatialBlocks.y * spatialBlocks.z * spatialThreadsPerBlock.x * sizeof(float);
-  mFreq = freqBlocks.x * freqBlocks.y * freqBlocks.z * freqThreadsPerBlock.x * sizeof(cuComplex);
 
   cudaDeviceReset();
   cudaProfilerStart();
 
-  cerr << "Survived Setup" << endl;
   // Memory Allocation
   err = cudaMalloc(&im, mSpatial);
   if(err){
@@ -229,6 +178,16 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
+  err = cudaMalloc(&tmp, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
+  err = cudaMalloc(&tmp2, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
   err = cudaMemset(im, 0, mSpatial);
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
@@ -239,84 +198,48 @@ int deconvLR(unsigned int nIter, size_t N1, size_t N2, size_t N3, float *hImage,
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  cerr << "Survived Malloc" << endl;
+  err = cudaMemset(buf, 0, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
+  err = cudaMemset(tmp, 0, mSpatial);
+  if(err){
+    fprintf(stderr, "CUDA error: %d\n", err);
+    return err;
+  }
   // Memory Copy for GPU Mem
   err = cudaMemcpy(im, hImage, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
-  cerr << "1st MEMCPY" << endl;
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
   err = cudaMemcpy(psf, hPSF, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
-  cerr << "2nd MEMCPY" << endl;
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
   err = cudaMemcpy(otf, hPSF2, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
-  cerr << "3rd MEMCPY" << endl;
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
   err = cudaMemcpy(obj, hImage, nSpatial*sizeof(float), cudaMemcpyHostToDevice);
-  cerr << "4th MEMCPY" << endl;
   if(err){
     fprintf(stderr, "CUDA error: %d\n", err);
     return err;
   }
-  cerr << "Survived Memcpy" << endl;
-  /*
-  r = createPlans(N1, N2, N3, &planR2C, &planC2R, &tmp, &tmpWork);
-  if(r){
-    fprintf(stderr, "CuFFT error: %d\n", r);
-    return r;
-  }
-  r = cufftExecR2C(planR2C, (float*)otf, otf);
-  if(r){
-    fprintf(stderr, "CuFFT error: %d\n", r);
-    return r;
-  }
-  */
+
   for(int i = 0; i < nIter; i++){
-    // cerr << "Iteration: " << i << endl;
-    /*r = cufftExecR2C(planR2C, obj, (cufftComplex*)buf);
-    if(r){
-      fprintf(stderr, "CuFFT error: %d\n", r);
-      return r;
-    }
-    ComplexMul<<<freqBlocks, freqThreadsPerBlock>>>((cuComplex*)buf, otf, (cuComplex*)buf);
-    r = cufftExecC2R(planC2R, (cufftComplex*)buf, (float*)buf);
-    if(r){
-      fprintf(stderr, "CuFFT error: %d\n", r);
-      return r;
-    }*/
-    // cerr << N1 << " , " << N2 << " , " << N3 << endl;
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, (float *)buf, N1, N2, PSF_x, PSF_y);
-    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, (float *)buf, (float *)buf);
-
-    //int HC = N1 - PSF_x + 1;
-    //int WC = N2 - PSF_y + 1;
-
-    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, otf, (float *)buf, N1, N2, PSF_x, PSF_y);
-    //cerr << (
-    /*r = cufftExecR2C(planR2C, (float*)buf, (cufftComplex*)buf);
-    if(r){
-      fprintf(stderr, "CuFFT error: %d\n", r);
-      return r;
-    }
-    ComplexMul<<<freqBlocks, freqThreadsPerBlock>>>((cuComplex*)buf, otf, (cuComplex*)buf);
-    r = cufftExecC2R(planC2R, (cufftComplex*)buf, (float*)buf);
-    if(r){
-      fprintf(stderr, "CuFFT error: %d\n", r);
-      return r;
-    }*/
-    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>((float *)buf, obj, obj);
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(obj, psf, tmp, N1, N2, PSF_x, PSF_y);
+    floatDiv<<<spatialBlocks, spatialThreadsPerBlock>>>(im, tmp, buf);
+    convolution<<<spatialBlocks, spatialThreadsPerBlock>>>(buf, otf, tmp, N1, N2, PSF_x, PSF_y);
+    floatMul<<<spatialBlocks, spatialThreadsPerBlock>>>(tmp, obj, obj);
   }
   // Copy output to host
   err = cudaMemcpy(hObject, obj, nSpatial*sizeof(float), cudaMemcpyDeviceToHost);
   if(err){
-    fprintf(stderr, "CUDA error: %d\n", err);
+    fprintf(stderr, "CUDA error in output: %d\n", err);
     return err;
   }
 
@@ -345,29 +268,33 @@ std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
     lodepng::decode(image, w, h, filename);
 
     std::vector<int> image_without_alpha;
-    for(unsigned int i = 0; i < image.size(); i++) {
+    /*for(unsigned int i = 0; i < image.size(); i++) {
         if (i % 4 != 3) {
             image_without_alpha.push_back((int)image[i]);
         }
+    }*/
+    for(unsigned int i = 0; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
+    }
+    for(unsigned int i = 1; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
+    }
+    for(unsigned int i = 2; i < image.size(); i+=4){
+         image_without_alpha.push_back((int)image[i]);
     }
 
     return image_without_alpha;
 }
 
 int encodePNG(vector<int> im, unsigned &w, unsigned &h){
-    int counter = 0;
     vector<unsigned char> image;
-    for(int i = 0; i < im.size(); i++){
-        if(i%3 == 0 && i != 0){
-            image.push_back(255);
-        }
+    for(int i = 0; i < im.size()/3; i++){
         image.push_back(im[i]);
+	image.push_back(im[i+(w*h)]);
+	image.push_back(im[i+(2*w*h)]);
+	image.push_back(255);
     }
-    image.push_back(255);
-    cerr << "SIZE: " << image.size() <<endl;
     unsigned err = lodepng::encode((const char *)"./img/test3.png", image, w, h);
-    cerr << lodepng_error_text(err) << endl;
-    //lodepng::save_file
     return 0;
 }
 
@@ -452,11 +379,28 @@ void convert1D(std::vector<std::vector<std::vector<double> > > &a, std::vector<d
 	for(unsigned i = 0; i < a.size(); i++) {
 		for(unsigned j = 0; j < a[0].size(); j++) {
 			vec1D.push_back(a[i][j][0]);
-			vec1D.push_back(a[i][j][1]);
-			vec1D.push_back(a[i][j][2]);
+			//vec1D.push_back(a[i][j][1]);
+			//vec1D.push_back(a[i][j][2]);
 			//vec1D.push_back((unsigned char)(255));
 		}
 	}
+        for(unsigned i = 0; i < a.size(); i++) {
+                for(unsigned j = 0; j < a[0].size(); j++) {
+                        //vec1D.push_back(a[i][j][0]);
+                        vec1D.push_back(a[i][j][1]);
+                        //vec1D.push_back(a[i][j][2]);
+                        //vec1D.push_back((unsigned char)(255));
+                }
+        }
+        for(unsigned i = 0; i < a.size(); i++) {
+                for(unsigned j = 0; j < a[0].size(); j++) {
+                        //vec1D.push_back(a[i][j][0]);
+                        //vec1D.push_back(a[i][j][1]);
+                        vec1D.push_back(a[i][j][2]);
+                        //vec1D.push_back((unsigned char)(255));
+                }
+        }
+
 }
 
 
@@ -514,10 +458,8 @@ int main(int argc, char **argv)
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
   cudaEventRecord(start, 0);
-  std::cerr << "Survived Initialization" << std::endl;
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y, PSF2);
-  std::cerr << "Survived Algorithm" << std::endl;
   cudaEventRecord(stop, 0);
   float t = 0;
   cudaEventSynchronize(stop);
@@ -529,8 +471,6 @@ int main(int argc, char **argv)
   //out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
   for(int i = 0; i < 2764800; i++)
     out_vec.push_back( static_cast<int>(out_arr[i]) );
-  cerr << "Size of output vector: " << out_vec.size() << endl;
-  cerr << "Size of ref vector: " << ref.size() << endl;
   /* Metrics */
   std::cout << "Elapsed time: " << t << std::endl;
   std::cout << "MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
@@ -538,5 +478,5 @@ int main(int argc, char **argv)
   int test = encodePNG(out_vec, w_blurry, h_blurry);
   /* TODO: Append alpha values to out_vec and change back to char in order to see the deblurred image THIS TODO IS DONE*/
 
-  return 0;
+  return ret;
 }
