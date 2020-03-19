@@ -30,12 +30,12 @@ __global__ void floatDiv(float *A, float *B, float *C)
                       blockDim.x + blockIdx.y * gridDim.z *
                       blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
     //float b = A[i]/B[i];
-    C[i] = A[i]/B[i];
-    /*if(abs(B[i]) < 0.05){
+    //C[i] = A[i]/B[i];
+    if((int)B[i] == 0){
       C[i] = A[i];
     } else {
       C[i] = A[i] / B[i];
-    }*/
+    }
 }
 
 __global__ void floatMul(float *A, float *B, float *C)
@@ -321,8 +321,8 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 	double mean_row = 0.0;
 	double mean_col = 0.0;
 
-	double sigma_row = 12.0;
-	double sigma_col = 6.0;
+	double sigma_row = 5.0;
+	double sigma_col = 5.0;
 
 	double sum = 0.0;
 	double temp;
@@ -430,7 +430,7 @@ int main(int argc, char **argv)
 
   int ret = 0;
   int im_z = 3;
-  int nIter = 5;
+  int nIter = 8;
   int PSF_x = 5;
   int PSF_y = 5;
 
