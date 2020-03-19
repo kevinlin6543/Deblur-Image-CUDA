@@ -29,8 +29,8 @@ __global__ void floatDiv(float *A, float *B, float *C)
     unsigned int i = blockIdx.x * gridDim.y * gridDim.z *
                       blockDim.x + blockIdx.y * gridDim.z *
                       blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
-    int b = A[i]/B[i];
-    C[i] = b;
+    //float b = A[i]/B[i];
+    C[i] = A[i]/B[i];
     /*if(abs(B[i]) < 0.05){
       C[i] = A[i];
     } else {
@@ -62,14 +62,16 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
                       blockDim.x + blockIdx.z * blockDim.x + threadIdx.x;
   int color = i / (HA * WA);
   float sum = 0;
-  if(i - 1 > 0 && ((i + 1) /(HA * WA) == color)){
+  int diff = (-WB/2) + (WA*(-HB/2));
+  if(i + diff > 0 && ((i + diff) /(HA * WA) == color) && ((i - diff) / (HA* WA) == color)){
     for(int x = -WB/2; x < WB/2; x++){
       for(int y = -HB/2; y < HB/2; y++){
         sum += A[i + x + (WA*y)] * B[(x + 2) + ((y+2)*WB)];
       }
     }
-  }
   C[i] = sum;
+  }
+  //C[i] = sum;
 }
 
 
@@ -428,7 +430,7 @@ int main(int argc, char **argv)
 
   int ret = 0;
   int im_z = 3;
-  int nIter = 1;
+  int nIter = 5;
   int PSF_x = 5;
   int PSF_y = 5;
 
