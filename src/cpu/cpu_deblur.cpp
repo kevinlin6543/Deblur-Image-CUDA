@@ -64,7 +64,11 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 
 std::vector<double> decodePNG(const char* filename, unsigned &w, unsigned &h) {
     std::vector<unsigned char> image;
-    lodepng::decode(image, w, h, filename);
+    unsigned error = lodepng::decode(image, w, h, filename);
+	if (error) {
+		std::cerr << "ERROR: " << error << " Unable to decode PNG file, " << filename << '\n';
+		exit(-1);
+	}
 
     std::vector<int> image_without_alpha;
     for(unsigned int i = 0; i < image.size(); i++) {
@@ -182,16 +186,20 @@ void print3D(std::vector<std::vector<std::vector<double> > > a) {
 
 int main(int argc, char *argv[])
 {
-	if (argc < 3) {
+	if (argc < 5) {
+		std::cerr << "Usage: cpu_deblur.out [OUTPUT FILE] [iterations] [BLURRY IMAGE PNG FILE] [ORIGINAL IMAGE PNG FILE]" << '\n';
 		exit(-1);
 	}
 	const char *fileout = argv[1];
 	int iterations = atoi(argv[2]);
-
+	const char *blurryfile = argv[3];
+	const char *origfile = argv[4];
     unsigned w_blurry, h_blurry;
     unsigned w_orig, h_orig;
-    std::vector<double> image = decodePNG("../img/blurry.png", w_blurry, h_blurry);
-    std::vector<double> ref = decodePNG("../img/orig.png", w_orig, h_orig);
+
+
+    std::vector<double> image = decodePNG(blurryfile, w_blurry, h_blurry);
+    std::vector<double> ref = decodePNG(origfile, w_orig, h_orig);
 
 	std::vector<int> intref(ref.begin(), ref.end());
 	std::vector<int> intimage(image.begin(), image.end());
@@ -200,14 +208,12 @@ int main(int argc, char *argv[])
     final_RGB_img.resize(h_blurry);
     std::vector<std::vector<double> > initial = convert2D(image, w_blurry * 3, h_blurry);
 
-    for (int i = 0; i < initial.size(); i++) {
+    for (unsigned i = 0; i < initial.size(); i++) {
         final_RGB_img[i] = convert2D(initial[i], 3, w_blurry);
     }
 
 	std::vector<std::vector<std::vector<double> > > psf_hat;
 	std::vector<std::vector<std::vector<double> > > psf = calculatePSF(psf_hat);
-	print3D(psf);
-	print3D(psf_hat);
 
 	auto latent_est(final_RGB_img);
 	std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
