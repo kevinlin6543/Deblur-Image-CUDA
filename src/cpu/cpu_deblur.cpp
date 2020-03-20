@@ -1,5 +1,5 @@
-#include "./lodepng/lodepng.h"
-#include "./metrics.hpp"
+#include "../lodepng/lodepng.h"
+#include "../metrics/metrics.hpp"
 #include <iostream>
 #include <math.h>
 #include <algorithm>
@@ -190,8 +190,8 @@ int main(int argc, char *argv[])
 
     unsigned w_blurry, h_blurry;
     unsigned w_orig, h_orig;
-    std::vector<double> image = decodePNG("./blurry.png", w_blurry, h_blurry);
-    std::vector<double> ref = decodePNG("./orig.png", w_orig, h_orig);
+    std::vector<double> image = decodePNG("../img/blurry.png", w_blurry, h_blurry);
+    std::vector<double> ref = decodePNG("../img/orig.png", w_orig, h_orig);
 
 	std::vector<int> intref(ref.begin(), ref.end());
 	std::vector<int> intimage(image.begin(), image.end());
