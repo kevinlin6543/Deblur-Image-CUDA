@@ -296,7 +296,7 @@ std::vector<int> decodePNG(const char* filename, unsigned &w, unsigned &h) {
     return image_without_alpha;
 }
 
-int encodePNG(vector<int> im, unsigned &w, unsigned &h){
+int encodePNG(vector<int> im, unsigned &w, unsigned &h, char *filename){
     vector<unsigned char> image;
     for(int i = 0; i < im.size()/3; i++){
         image.push_back(im[i]);
@@ -304,7 +304,7 @@ int encodePNG(vector<int> im, unsigned &w, unsigned &h){
 	image.push_back(im[i+(2*w*h)]);
 	image.push_back(255);
     }
-    unsigned err = lodepng::encode((const char *)"./img/test3.png", image, w, h);
+    unsigned err = lodepng::encode((const char *)filename, image, w, h);
     return 0;
 }
 
@@ -430,17 +430,16 @@ float * vecToArr2(std::vector<double> image)
 
 int main(int argc, char **argv)
 {
-  if(argc != 3)
+  if(argc != 4)
   {
-    std::cerr << "Usage:  " << argv[0] << " blurry.png ref.png" << std::endl;
+    std::cerr << "Usage:  " << argv[0] << " blurry.png ref.png out.png" << std::endl;
     exit(-1);
   }
 
-  //int ret = 0;
   float ret = 0;
   int im_z = 3;
 
-  int nIter = 15;
+  int nIter = 5;
   int PSF_x = 5;
   int PSF_y = 5;
 
@@ -467,16 +466,16 @@ int main(int argc, char **argv)
   
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
-  //out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
   for(int i = 0; i < (h_blurry * w_blurry * im_z); i++)
     out_vec.push_back( static_cast<int>(out_arr[i]) );
 
   /* Metrics */
+  std::cout << "Blurry MSE: " << _mse(blurry, w_blurry, h_blurry, ref) << std::endl;
+  std::cout << "Blurry pSNR: " << psnr(blurry, w_blurry, h_blurry, ref) << "\n\n" << std::endl; 
+  std::cout << "Deblur MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
+  std::cout << "Deblur pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << "\n" << std::endl;
   std::cout << "Elapsed time (ms): " << ret << std::endl;
-  std::cout << "MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
-  std::cout << "pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << std::endl;
-  int test = encodePNG(out_vec, w_blurry, h_blurry);
-  /* TODO: Append alpha values to out_vec and change back to char in order to see the deblurred image THIS TODO IS DONE*/
+  int test = encodePNG(out_vec, w_blurry, h_blurry, argv[3]);
 
   return ret;
 }

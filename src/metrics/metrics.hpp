@@ -7,6 +7,7 @@
 		From MATLAB docs:
 		MSE measures the average squared difference between actual and ideal pixel values. 
 		This metric is simple to calculate but might not align well with the human perception of quality.
+	
 */
 double _mse(std::vector<int> im, unsigned int im_w, unsigned int im_h, std::vector<int> ref);
 
@@ -20,3 +21,4 @@ double _mse(std::vector<int> im, unsigned int im_w, unsigned int im_h, std::vect
 			pSNR = 10*log10(R^2 / MSE), where R is the maximum fluctuation in the input image data type
 */
 double psnr(std::vector<int> im, unsigned int im_w, unsigned int im_h, std::vector<int> ref);
+
