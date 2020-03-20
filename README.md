@@ -9,7 +9,7 @@ git
 ```
 
 ## Usage
-1 . Run on cross-compile machine
+1. Run on cross-compile machine
 ```bash
 git clone https://github.com/kevinlin6543/Deblur-Image-CUDA.git
 cd ./src
