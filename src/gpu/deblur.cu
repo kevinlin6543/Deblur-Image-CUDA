@@ -66,7 +66,7 @@ __global__ void convolution(float *A, float *B, float *C, int HA, int WA, int HB
   if(i + diff > 0 && ((i + diff) /(HA * WA) == color) && ((i - diff) / (HA* WA) == color)){
     for(int x = -WB/2; x < WB/2; x++){
       for(int y = -HB/2; y < HB/2; y++){
-        sum += A[i + x + (WA*y)] * B[(x + 2) + ((y+2)*WB)];
+        sum += A[i + x + (WA*y)] * B[(x + (HB/2)) + ((y+(WB/2))*WB)];
       }
     }
   C[i] = sum;
@@ -316,13 +316,13 @@ float * vecToArr(std::vector<int> image)
 }
 
 const double pi = 3.14159265358979323846;
-std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
-	int psf_size = 5;
+std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat, int size) {
+	int psf_size = size;
 	double mean_row = 0.0;
 	double mean_col = 0.0;
 
-	double sigma_row = 5.0;
-	double sigma_col = 5.0;
+	double sigma_row = 49.0;
+	double sigma_col = 36.0;
 
 	double sum = 0.0;
 	double temp;
@@ -430,12 +430,12 @@ int main(int argc, char **argv)
 
   int ret = 0;
   int im_z = 3;
-  int nIter = 8;
+  int nIter = 15;
   int PSF_x = 5;
   int PSF_y = 5;
 
   std::vector<std::vector<std::vector<double>>> psf_hat;
-  std::vector<std::vector<std::vector<double>>> psf_vec = calculatePSF(psf_hat);
+  std::vector<std::vector<std::vector<double>>> psf_vec = calculatePSF(psf_hat, PSF_x);
   std::vector<double> psf_1d;
   convert1D(psf_vec, psf_1d);
   float *PSF = vecToArr2(psf_1d);
@@ -471,7 +471,7 @@ int main(int argc, char **argv)
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
   //out_vec.insert(out_vec.begin(), std::begin(out_arr), std::end(out_arr));
-  for(int i = 0; i < 2764800; i++)
+  for(int i = 0; i < (h_blurry * w_blurry * im_z); i++)
     out_vec.push_back( static_cast<int>(out_arr[i]) );
   /* Metrics */
   std::cout << "Elapsed time: " << t << std::endl;
