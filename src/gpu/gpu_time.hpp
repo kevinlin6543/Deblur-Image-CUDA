@@ -10,6 +10,8 @@
 		cout << "Elapsed time: " << gt.elap_time() << endl;
 		
  */
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 class gpu_time {
 	cudaEvent_t start, stop;
@@ -45,7 +47,7 @@ class gpu_time {
 	{
 		float t = 0;
 		cudaEventSynchronize(stop);
-		cudaEvenElapsedTime(&t, start, stop);
+		cudaEventElapsedTime(&t, start, stop);
 		return t;
 	}
 };
