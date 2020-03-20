@@ -19,8 +19,8 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 	int psf_size = 5;
 	double mean_row = 0.0;
 	double mean_col = 0.0;
-	double sigma_row = 3;
-	double sigma_col = 4;
+	double sigma_row = 49;
+	double sigma_col = 36;
 	double sum = 0.0;
 	double temp;
 
