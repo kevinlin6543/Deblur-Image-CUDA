@@ -6,15 +6,15 @@
 #include <chrono>
 
 const double pi = 3.14159265358979323846;
-//unsigned width, height, width_o, height_o;
+
 
 std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
 	int psf_size = 5;
 	double mean_row = 0.0;
-	double mean_col = psf_size/2.0;
+	double mean_col = 0.0;
 
-	double sigma_row = 9.0;
-	double sigma_col = 8.0;
+	double sigma_row = 3;
+	double sigma_col = 4;
 
 	double sum = 0.0;
 	double temp;
@@ -131,7 +131,23 @@ void elementWiseDiv(std::vector<std::vector<std::vector<double> > > &a,
 	}
 	for(unsigned i = 0; i < a.size(); i++) {
 		for(unsigned j = 0; j < a[0].size(); j++) {
-			std::transform(a[i][j].begin(), a[i][j].end(), b[i][j].begin(), c[i][j].begin(), std::divides<double>());
+			//std::transform(a[i][j].begin(), a[i][j].end(), b[i][j].begin(), c[i][j].begin(), std::divides<double>());
+			if (b[i][j][0] != 0) {
+				c[i][j][0] = a[i][j][0] / b[i][j][0];
+			} else {
+				c[i][j][0] = a[i][j][0];
+			}
+			if (b[i][j][1] != 0) {
+				c[i][j][1] = a[i][j][1] / b[i][j][1];
+			} else {
+				c[i][j][1] = a[i][j][1];
+			}
+			if (b[i][j][2] != 0) {
+				c[i][j][2] = a[i][j][2] / b[i][j][2];
+			} else {
+				c[i][j][2] = a[i][j][2];
+			}
+
 		}
 	}
 }
@@ -222,6 +238,7 @@ int main(int argc, char *argv[])
 		std::vector<std::vector<std::vector<double> > > error_est = convolve(relative_blur, psf_hat);
 		elementWiseMul(temp, error_est, latent_est);
 	}
+
 	auto stop = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 	std::cout << duration.count() << std::endl;
