@@ -15,7 +15,7 @@ git clone https://github.com/kevinlin6543/Deblur-Image-CUDA.git
 cd ./src
 make
 ```
-2. Results in a 'deblur' file. Move file to Jetson Nanoor equivalent
+2. Results in a 'deblur' file. Move file to Jetson Nano or equivalent
 
 3. On Jetson Nano:
 ```bash
