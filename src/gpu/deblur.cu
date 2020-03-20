@@ -430,16 +430,16 @@ float * vecToArr2(std::vector<double> image)
 
 int main(int argc, char **argv)
 {
-  if(argc != 4)
+  if(argc != 5)
   {
-    std::cerr << "Usage:  " << argv[0] << " blurry.png ref.png out.png" << std::endl;
+    std::cerr << "Usage:  " << argv[0] << " blurry.png ref.png iterations out.png" << std::endl;
     exit(-1);
   }
 
   float ret = 0;
   int im_z = 3;
 
-  int nIter = 5;
+  int nIter = atoi(argv[3]);
   int PSF_x = 5;
   int PSF_y = 5;
 
@@ -463,7 +463,7 @@ int main(int argc, char **argv)
 
   /* Call kernel function with blurry_arr, w_blurry, h_blurry */
   ret = deconvLR(nIter, h_blurry, w_blurry, im_z, blurry_arr, PSF, out_arr, PSF_x, PSF_y, PSF2);
-  
+
   /* Re-convert back to vector for metrics computation */
   std::vector<int> out_vec;
   for(int i = 0; i < (h_blurry * w_blurry * im_z); i++)
@@ -471,11 +471,11 @@ int main(int argc, char **argv)
 
   /* Metrics */
   std::cout << "Blurry MSE: " << _mse(blurry, w_blurry, h_blurry, ref) << std::endl;
-  std::cout << "Blurry pSNR: " << psnr(blurry, w_blurry, h_blurry, ref) << "\n\n" << std::endl; 
+  std::cout << "Blurry pSNR: " << psnr(blurry, w_blurry, h_blurry, ref) << "\n\n" << std::endl;
   std::cout << "Deblur MSE: " << _mse(out_vec, w_blurry, h_blurry, ref) << std::endl;
   std::cout << "Deblur pSNR: " << psnr(out_vec, w_blurry, h_blurry, ref) << "\n" << std::endl;
   std::cout << "Elapsed time (ms): " << ret << std::endl;
-  int test = encodePNG(out_vec, w_blurry, h_blurry, argv[3]);
+  int test = encodePNG(out_vec, w_blurry, h_blurry, argv[4]);
 
   return ret;
 }

@@ -187,16 +187,16 @@ void print3D(std::vector<std::vector<std::vector<double> > > a) {
 int main(int argc, char *argv[])
 {
 	if (argc < 5) {
-		std::cerr << "Usage: cpu_deblur.out [OUTPUT FILE] [iterations] [BLURRY IMAGE PNG FILE] [ORIGINAL IMAGE PNG FILE]" << '\n';
+		std::cerr << "Usage:  " << argv[0] << " [BLURRY IMAGE PNG FILE] [ORIGINAL IMAGE PNG FILE] [iterations] [OUTPUT FILE]" << '\n';
 		exit(-1);
 	}
-	const char *fileout = argv[1];
-	int iterations = atoi(argv[2]);
-	const char *blurryfile = argv[3];
-	const char *origfile = argv[4];
+	const char *fileout = argv[4];
+	int iterations = atoi(argv[3]);
+	const char *blurryfile = argv[1];
+	const char *origfile = argv[2];
+
     unsigned w_blurry, h_blurry;
     unsigned w_orig, h_orig;
-
 
     std::vector<double> image = decodePNG(blurryfile, w_blurry, h_blurry);
     std::vector<double> ref = decodePNG(origfile, w_orig, h_orig);
@@ -228,9 +228,8 @@ int main(int argc, char *argv[])
 		elementWiseMul(temp, error_est, latent_est);
 	}
 	auto stop = std::chrono::high_resolution_clock::now();
-
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-	std::cout << duration.count() << std::endl;
+	std::cout << "Elapsed time (ms): " << duration.count() << std::endl;
 
 	std::vector<unsigned char> est1D;
 	std::vector<int> est1D_without_alpha;
