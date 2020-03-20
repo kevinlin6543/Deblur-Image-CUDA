@@ -15,7 +15,7 @@ double _mse(std::vector<int> im, unsigned int im_w, unsigned int im_h, std::vect
 	}
 
 	double sq_err = 0;
-
+	
 	for(unsigned long i = 0; i < im.size(); i+=3)
 	{
 		/* Get the RGB values for the image and reference */
