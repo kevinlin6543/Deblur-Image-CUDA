@@ -13,11 +13,11 @@ CUDART_LIB = /usr/local/cuda-10.0/targets/aarch64-linux/lib/libcudart.so
 all: deblur.o metrics.o lodepng.o
 	$(CC) -o deblur deblur.o -L$(NVCC_LIB) -lcudart metrics.o lodepng.o
 
-deblur.o: deblur.cu
-	$(NVCC) -I. -I$(INCLUDES) -c deblur.cu
+deblur.o: ./gpu/deblur.cu
+	$(NVCC) -I. -I$(INCLUDES) -c ./gpu/deblur.cu
 
 metrics.o: ./metrics/metrics.cpp ./metrics/metrics.hpp
-	$(CC) -c ../metrics/metrics.cpp
+	$(CC) -c ./metrics/metrics.cpp
 
 lodepng.o: ./lodepng/lodepng.cpp ./lodepng/lodepng.h
 	$(CC) -c ./lodepng/lodepng.cpp $(CFLAGS)
