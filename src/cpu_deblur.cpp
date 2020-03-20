@@ -7,15 +7,20 @@
 
 const double pi = 3.14159265358979323846;
 
+double _divide(double a, double b) {
+	if (b == 0) {
+		return a;
+	} else {
+		return a/b;
+	}
+}
 
 std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::vector<std::vector<double> > > &psf_hat) {
 	int psf_size = 5;
 	double mean_row = 0.0;
 	double mean_col = 0.0;
-
 	double sigma_row = 3;
 	double sigma_col = 4;
-
 	double sum = 0.0;
 	double temp;
 
@@ -31,7 +36,6 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 		}
 	}
 
-
 	for (unsigned row = 0; row<psf_init.size(); row++) {
 		for (unsigned col = 0; col<psf_init[0].size(); col++) {
 			psf_init[row][col] /= sum;
@@ -40,7 +44,6 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 
 	for (unsigned row = 0; row<psf_init.size(); row++) {
 		for (unsigned col = 0; col<psf_init[0].size(); col++) {
-			//std::cerr << "[" << row << ", " << col << "] = " << psf_init[row][col] << '\n';
 			double curr = psf_init[row][col];
 			psf_final[row][col][0] = curr/3;
 			psf_final[row][col][1] = curr/3;
@@ -61,8 +64,6 @@ std::vector<std::vector<std::vector<double> > > calculatePSF(std::vector<std::ve
 
 std::vector<double> decodePNG(const char* filename, unsigned &w, unsigned &h) {
     std::vector<unsigned char> image;
-    //unsigned width, height;
-
     lodepng::decode(image, w, h, filename);
 
     std::vector<int> image_without_alpha;
@@ -75,7 +76,6 @@ std::vector<double> decodePNG(const char* filename, unsigned &w, unsigned &h) {
 
     return doubleVec;
 }
-
 
 std::vector<std::vector<double> > convert2D(std::vector<double> &vec1D, unsigned w, unsigned h) {
     std::vector<std::vector<double> > vec2D;
@@ -131,30 +131,15 @@ void elementWiseDiv(std::vector<std::vector<std::vector<double> > > &a,
 	}
 	for(unsigned i = 0; i < a.size(); i++) {
 		for(unsigned j = 0; j < a[0].size(); j++) {
-			//std::transform(a[i][j].begin(), a[i][j].end(), b[i][j].begin(), c[i][j].begin(), std::divides<double>());
-			if (b[i][j][0] != 0) {
-				c[i][j][0] = a[i][j][0] / b[i][j][0];
-			} else {
-				c[i][j][0] = a[i][j][0];
-			}
-			if (b[i][j][1] != 0) {
-				c[i][j][1] = a[i][j][1] / b[i][j][1];
-			} else {
-				c[i][j][1] = a[i][j][1];
-			}
-			if (b[i][j][2] != 0) {
-				c[i][j][2] = a[i][j][2] / b[i][j][2];
-			} else {
-				c[i][j][2] = a[i][j][2];
-			}
-
+			c[i][j][0] = _divide(a[i][j][0], b[i][j][0]);
+			c[i][j][1] = _divide(a[i][j][1], b[i][j][1]);
+			c[i][j][2] = _divide(a[i][j][2], b[i][j][2]);
 		}
 	}
 }
 
 std::vector<std::vector<std::vector<double> > > convolve(std::vector<std::vector<std::vector<double> > > &src,
 	std::vector<std::vector<std::vector<double> > > &kernel) {
-	//auto dest(src);
 	std::vector<std::vector<std::vector<double> > > dest(src.size(), std::vector<std::vector<double> > (src[0].size(), std::vector<double> (3, 0.0)));
 	int kernel_centerx = kernel[0].size() / 2;
 	int kernel_centery = kernel.size() / 2;
@@ -168,11 +153,9 @@ std::vector<std::vector<std::vector<double> > > convolve(std::vector<std::vector
 	                int jj = j + (n - kernel_centerx);
 	                if(ii >= 0 && ii < rows && jj >= 0 && jj < cols) {
 						std::vector<double> temp(3, 0);
-						//std::transform(src[ii][jj].begin(), src[ii][jj].end(), kernel[m][n].begin(), temp.begin(), std::multiplies<double>());
 						dest[i][j][0] += src[ii][jj][0] * kernel[m][n][0];
 						dest[i][j][1] += src[ii][jj][1] * kernel[m][n][1];
 						dest[i][j][2] += src[ii][jj][2] * kernel[m][n][2];
-	                  	//dest[i][j] += src[ii][jj] * kernel[m][n];
 				  	}
 	            }
 	        }
@@ -227,9 +210,9 @@ int main(int argc, char *argv[])
 	print3D(psf_hat);
 
 	auto latent_est(final_RGB_img);
+	std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 
 	auto start = std::chrono::high_resolution_clock::now();
-	std::vector<std::vector<std::vector<double> > > relative_blur(h_blurry, std::vector<std::vector<double> > (w_blurry, std::vector<double> (3, 0)));
 	for (int i = 0; i < iterations; i++) {
 		std::vector<std::vector<std::vector<double> > > est_conv = convolve(latent_est, psf);
 		elementWiseDiv(final_RGB_img, est_conv, relative_blur);
@@ -238,8 +221,8 @@ int main(int argc, char *argv[])
 		std::vector<std::vector<std::vector<double> > > error_est = convolve(relative_blur, psf_hat);
 		elementWiseMul(temp, error_est, latent_est);
 	}
-
 	auto stop = std::chrono::high_resolution_clock::now();
+
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 	std::cout << duration.count() << std::endl;
 
@@ -253,6 +236,7 @@ int main(int argc, char *argv[])
             est1D_without_alpha.push_back((int)est1D[i]);
         }
 	}
+
     std::cout << "The blurry MSE is " << _mse(intimage, w_blurry, h_blurry, intref) << std::endl;
     std::cout << "The blurry pSNR is " << psnr(intimage, w_blurry, h_blurry, intref) << std::endl;
 	std::cout << "The estimated MSE is " << _mse(est1D_without_alpha, w_blurry, h_blurry, intref) << std::endl;
