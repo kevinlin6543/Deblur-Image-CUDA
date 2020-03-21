@@ -12,7 +12,7 @@ git
 1. Run on cross-compile machine
 ```bash
 git clone https://github.com/kevinlin6543/Deblur-Image-CUDA.git
-cd ./src
+cd ./Deblur-Image-CUDA/src
 make
 ```
 2. Results in a 'deblur' file. Move file to Jetson Nano or equivalent
@@ -26,7 +26,7 @@ cd [Directory with deblur file]
 ## Usage of CPU only code
 ```bash
 git clone https://github.com/kevinlin6543/Deblur-Image-CUDA.git
-cd ./src
+cd ./Deblur-Image-CUDA/src
 make cpu_deblur
 ./cpu_deblur.out [blurry png file] [original png file] [number of iterations] [output png file]
 ```
